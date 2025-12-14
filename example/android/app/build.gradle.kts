@@ -37,6 +37,12 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    sourceSets {
+        getByName("main") {
+            assets.srcDir("../../assets/models")
+        }
+    }
 }
 
 flutter {

@@ -46,3 +46,4 @@ app.*.map.json
 example\assets\models\gemma-3-270m-it-int8.task
 example\assets\models\gemma3-1B-it-int4.task
 /assets/models
+.idea/

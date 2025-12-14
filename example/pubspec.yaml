@@ -30,18 +30,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
-  audioplayers: ^6.5.1
-  speech_to_text: ^7.3.0
-  file_picker: ^8.0.0+1
-  flutter_gemma: ^0.11.13
-  path_provider: ^2.0.15
-  flutter_tts: ^4.2.3
   sura_voxia:
     path: ../
+  file_picker: ^8.0.0+1
+  path_provider: ^2.0.15
+  flutter_gemma: ^0.11.13
 
 dev_dependencies:
   flutter_test:
@@ -99,3 +92,4 @@ flutter:
   # Assets
   assets:
     - assets/sounds/
+    - assets/models/gemma3-1B-it-int4.task
