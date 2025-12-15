@@ -22,7 +22,7 @@ class CosineSimilarityScreen extends StatefulWidget {
 class _CosineSimilarityScreenState extends State<CosineSimilarityScreen> {
   // Test sentences
   static const String queryText = "Which planet is known as the Red Planet";
-  static const String similarText = "Mars is famous for its reddish appearance";
+  static const String similarText = "Mars is famous f+or its reddish appearance";
   static const String differentText = "Pluto is not red";
 
   EmbeddingModel? _embeddingModel;
