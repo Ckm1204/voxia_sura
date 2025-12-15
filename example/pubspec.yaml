@@ -92,3 +92,4 @@ flutter:
   assets:
     - assets/sounds/
     - assets/models/gemma3-1B-it-int4.task
+    - assets/questionnaires/

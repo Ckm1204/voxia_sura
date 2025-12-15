@@ -1,0 +1,102 @@
+[
+  {
+    "id": "signos",
+    "displayName": "Signos vitales",
+    "questions": [
+      {
+        "id": "temperatura",
+        "label": "Temperatura corporal",
+        "prompt": "Temperatura corporal actual en grados centigrados?",
+        "type": "number",
+        "unit": "C"
+      },
+      {
+        "id": "presion_sistolica",
+        "label": "Presion arterial sistolica",
+        "prompt": "Presion sistolica en mmHg?",
+        "type": "number",
+        "unit": "mmHg"
+      },
+      {
+        "id": "presion_diastolica",
+        "label": "Presion arterial diastolica",
+        "prompt": "Presion diastolica en mmHg?",
+        "type": "number",
+        "unit": "mmHg"
+      },
+      {
+        "id": "frecuencia_cardiaca",
+        "label": "Frecuencia cardiaca",
+        "prompt": "Frecuencia cardiaca en latidos por minuto?",
+        "type": "number",
+        "unit": "lpm"
+      },
+      {
+        "id": "frecuencia_respiratoria",
+        "label": "Frecuencia respiratoria",
+        "prompt": "Frecuencia respiratoria en respiraciones por minuto?",
+        "type": "number",
+        "unit": "rpm"
+      },
+      {
+        "id": "saturacion_oxigeno",
+        "label": "Saturacion de oxigeno",
+        "prompt": "Saturacion de oxigeno en porcentaje?",
+        "type": "number",
+        "unit": "%"
+      },
+      {
+        "id": "peso",
+        "label": "Peso",
+        "prompt": "Peso del paciente en kilogramos?",
+        "type": "number",
+        "unit": "kg"
+      },
+      {
+        "id": "altura",
+        "label": "Altura",
+        "prompt": "Altura en centimetros?",
+        "type": "number",
+        "unit": "cm"
+      }
+    ]
+  },
+  {
+    "id": "antecedentes",
+    "displayName": "Antecedentes medicos basicos",
+    "questions": [
+      {
+        "id": "alergias",
+        "label": "Alergias conocidas",
+        "prompt": "El paciente reporta alergias? si es asi menciona cuales.",
+        "type": "booleanText"
+      },
+      {
+        "id": "medicamentos_actuales",
+        "label": "Medicamentos actuales",
+        "prompt": "Medicamentos actuales con dosis y frecuencia.",
+        "type": "longText"
+      },
+      {
+        "id": "enfermedades_previas",
+        "label": "Enfermedades o cirugias previas",
+        "prompt": "Enfermedades cronicas o cirugias relevantes?",
+        "type": "longText"
+      },
+      {
+        "id": "dolor_actual",
+        "label": "Dolor actual",
+        "prompt": "Tiene dolor en este momento? responde si o no.",
+        "type": "boolean"
+      },
+      {
+        "id": "escala_dolor",
+        "label": "Escala de dolor",
+        "prompt": "Si hay dolor, dame la intensidad del 0 al 10.",
+        "type": "range",
+        "min": 0,
+        "max": 10
+      }
+    ]
+  }
+]

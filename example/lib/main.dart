@@ -1,46 +1,11 @@
 import 'dart:async';
 import 'dart:ui' show PlatformDispatcher;
-import 'dart:io' as io;
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:sura_voxia/sura_voxia.dart';
-import 'nurse_questionnaire_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-const String defaultModelAssetKey = 'assets/models/gemma3-1B-it-int4.task';
-
-Future<bool> validateModelActivation(String assetKeyOrPath) async {
-  try {
-    bool isInstalled;
-    try {
-      isInstalled = await FlutterGemma.isModelInstalled(assetKeyOrPath);
-    } catch (_) {
-      isInstalled = false;
-    }
-
-    if (!isInstalled) {
-      try {
-        final basename = assetKeyOrPath.split(io.Platform.pathSeparator).last;
-        isInstalled = await FlutterGemma.isModelInstalled(basename);
-      } catch (_) {
-        isInstalled = false;
-      }
-    }
-
-    if (!isInstalled) {
-      debugPrint('validateModelActivation: isModelInstalled=false for $assetKeyOrPath');
-      return false;
-    }
-
-    return true;
-  } catch (e) {
-    debugPrint('validateModelActivation unexpected error: $e');
-    return false;
-  }
-}
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,7 +19,7 @@ void main() {
     return true;
   };
 
-  FlutterGemma.initialize();
+  VoxiaModelManager.initializeGemma();
   runApp(const VoxiaDemoApp());
 }
 
@@ -83,156 +48,49 @@ class VoxiaHomePage extends StatefulWidget {
 
 class _VoxiaHomePageState extends State<VoxiaHomePage> {
   late final VoxiaVoiceController _controller;
+  late final VoxiaModelManager _modelManager;
   int _selectedIndex = 0;
-  bool _isInstalling = false;
-  double _progress = 0.0;
 
   @override
   void initState() {
     super.initState();
     _controller = VoxiaVoiceController.defaultInstance();
+    _modelManager = VoxiaModelManager();
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _modelManager.dispose();
     super.dispose();
   }
 
   // Removed example FAB counter functionality.
 
-  Future<void> _pickAndInstallModel() async {
-    if (!io.Platform.isAndroid) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Esta operación sólo está disponible en Android.')),
-        );
-      }
-      return;
-    }
-
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['task'],
-      );
-
-      if (result == null || result.files.isEmpty) return;
-      final pickedPath = result.files.single.path;
-      if (pickedPath == null) return;
-
-      setState(() {
-        _isInstalling = true;
-        _progress = 0.0;
-      });
-
-      final appDocDir = await getApplicationDocumentsDirectory();
-      final targetFile = io.File('${appDocDir.path}${io.Platform.pathSeparator}model.task');
-      await io.File(pickedPath).copy(targetFile.path);
-
-      await FlutterGemma.installModel(
-        modelType: ModelType.gemmaIt,
-        fileType: ModelFileType.task,
-      ).fromFile(targetFile.path).withProgress((progress) {
-        final p = (progress as num).toDouble();
-        setState(() => _progress = p);
-      }).install();
-
-      final valid = await validateModelActivation('model.task');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(valid
-                ? 'Instalación completada con éxito.'
-                : 'Instalación completada pero la activación del modelo falló. Revisa logs o usa la pestaña Modelos.'),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error instalando modelo: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isInstalling = false;
-        });
-      }
-    }
+  Future<void> _onInstallModelFromFile() async {
+    final VoxiaModelActionResult result = await _modelManager.installFromFile();
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
   }
 
-  Future<void> _installDefaultModel() async {
-    if (!io.Platform.isAndroid) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Esta operación sólo está disponible en Android.')),
-        );
-      }
-      return;
-    }
-
-    try {
-      setState(() {
-        _isInstalling = true;
-        _progress = 0.0;
-      });
-
-      await FlutterGemma.installModel(
-        modelType: ModelType.gemmaIt,
-        fileType: ModelFileType.task,
-      ).fromAsset(defaultModelAssetKey).withProgress((progress) {
-        final p = (progress as num).toDouble();
-        setState(() => _progress = p);
-      }).install();
-
-      final valid = await validateModelActivation(defaultModelAssetKey);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(valid
-                ? 'Instalación completada y verificada.'
-                : 'Instalación completada pero la activación del modelo falló. Revisa logs o usa la pestaña Modelos.'),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error instalando modelo: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isInstalling = false;
-        });
-      }
-    }
+  Future<void> _onInstallDefaultModel() async {
+    final VoxiaModelActionResult result =
+        await _modelManager.installDefaultModel();
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
   }
 
-  Future<void> _checkInstalledByKey(String assetKey) async {
-    try {
-      final isInstalled = await validateModelActivation(assetKey);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isInstalled
-                  ? 'Modelo encontrado para "$assetKey".'
-                  : 'No se encontró instalación para "$assetKey". Verifica que exista en assets/models.',
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error comprobando "$assetKey": $e')),
-        );
-      }
-    }
+  Future<void> _onCheckInstalled([String? assetKey]) async {
+    final VoxiaModelActionResult result = await _modelManager
+        .checkInstalledByKey(assetKey ?? _modelManager.defaultModelAssetKey);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
   }
 
   Widget _buildModelTestTab() {
@@ -240,48 +98,58 @@ class _VoxiaHomePageState extends State<VoxiaHomePage> {
   }
 
   Widget _buildNurseAssistantTab() {
-    return const NurseQuestionnaireScreen();
+    return const _NurseAssistantTab();
   }
 
   Widget _buildModelsTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 8),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.file_upload),
-            label: const Text('Instalar modelo desde archivo (.task)'),
-            onPressed: _isInstalling ? null : _pickAndInstallModel,
+    return AnimatedBuilder(
+      animation: _modelManager,
+      builder: (BuildContext context, _) {
+        final bool isInstalling = _modelManager.isInstalling;
+        final double progress = _modelManager.progress;
+        final String defaultAssetKey = _modelManager.defaultModelAssetKey;
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.file_upload),
+                label: const Text('Instalar modelo desde archivo (.task)'),
+                onPressed: isInstalling ? null : _onInstallModelFromFile,
+              ),
+              const SizedBox(height: 12),
+              if (isInstalling) ...[
+                const Center(child: CircularProgressIndicator()),
+                const SizedBox(height: 8),
+                const Text('Instalando modelo...'),
+              ],
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: isInstalling ? null : _onInstallDefaultModel,
+                child: Text('Instalar ${defaultAssetKey.split('/').last}'),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () => _onCheckInstalled(defaultAssetKey),
+                child: Text(
+                  'Comprobar ${defaultAssetKey.split('/').last} instalado',
+                ),
+              ),
+              if (isInstalling && progress > 0) ...[
+                const SizedBox(height: 12),
+                Text('Progreso: ${progress.toStringAsFixed(1)}%'),
+              ],
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 8),
+              // contador de ejemplo eliminado
+            ],
           ),
-          const SizedBox(height: 12),
-          if (_isInstalling) ...[
-            const Center(child: CircularProgressIndicator()),
-            const SizedBox(height: 8),
-            const Text('Instalando modelo...'),
-          ],
-          const SizedBox(height: 12),
-          ElevatedButton(
-            onPressed: _isInstalling ? null : _installDefaultModel,
-            child: const Text('Instalar gemma3-1B-it-int4.task'),
-          ),
-          const SizedBox(height: 8),
-          ElevatedButton(
-            onPressed: () => _checkInstalledByKey(defaultModelAssetKey),
-            child: const Text('Comprobar gemma3-1B-it-int4.task instalado'),
-          ),
-          const SizedBox(height: 8),
-          if (_progress > 0) ...[
-            const SizedBox(height: 12),
-            Text('Progreso: ${_progress.toStringAsFixed(1)}%'),
-          ],
-          const SizedBox(height: 20),
-          const Divider(),
-          const SizedBox(height: 8),
-          // contador de ejemplo eliminado
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -301,59 +169,91 @@ class _VoxiaHomePageState extends State<VoxiaHomePage> {
                 alignment: WrapAlignment.center,
                 children: [
                   ElevatedButton(
-                    onPressed: state.canStartSession ? _controller.startSession : null,
-                    child: Text(
-                      switch (state.status) {
-                        VoxiaVoiceStatus.initializing => 'Iniciando...',
-                        VoxiaVoiceStatus.error => 'Reintentar sesión',
-                        _ => 'Iniciar sesión',
-                      },
-                    ),
+                    onPressed:
+                        state.canStartSession ? _controller.startSession : null,
+                    child: Text(switch (state.status) {
+                      VoxiaVoiceStatus.initializing => 'Iniciando...',
+                      VoxiaVoiceStatus.error => 'Reintentar sesión',
+                      _ => 'Iniciar sesión',
+                    }),
                   ),
                   ElevatedButton(
-                    onPressed: state.canListen
-                        ? () {
-                            if (state.isListening) {
-                              _controller.stopListening();
-                            } else {
-                              _controller.startListening();
+                    onPressed:
+                        state.canListen
+                            ? () {
+                              if (state.isListening) {
+                                _controller.stopListening();
+                              } else {
+                                _controller.startListening();
+                              }
                             }
-                          }
-                        : null,
+                            : null,
                     child: Text(state.isListening ? 'Parar' : 'Hablar'),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
               _StatusRow(label: 'Estado sesión', value: state.status.name),
-              _StatusRow(label: 'Speech habilitado', value: state.speechEnabled ? 'Sí' : 'No'),
-              _StatusRow(label: 'Escuchando', value: state.isListening ? 'Sí' : 'No'),
-              _StatusRow(label: 'Generando respuesta', value: state.isGenerating ? 'Sí' : 'No'),
-              _StatusRow(label: 'Hablando (TTS)', value: state.isSpeaking ? 'Sí' : 'No'),
-              _StatusRow(label: 'Locale', value: state.localeId.isEmpty ? 'unknown' : state.localeId),
-              const SizedBox(height: 12),
-              Text('Reconocido:', style: Theme.of(context).textTheme.titleMedium),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.black26),
-                ),
-                child: Text(state.recognizedText.isEmpty ? 'Sin texto aún' : state.recognizedText),
+              _StatusRow(
+                label: 'Speech habilitado',
+                value: state.speechEnabled ? 'Sí' : 'No',
+              ),
+              _StatusRow(
+                label: 'Escuchando',
+                value: state.isListening ? 'Sí' : 'No',
+              ),
+              _StatusRow(
+                label: 'Generando respuesta',
+                value: state.isGenerating ? 'Sí' : 'No',
+              ),
+              _StatusRow(
+                label: 'Hablando (TTS)',
+                value: state.isSpeaking ? 'Sí' : 'No',
+              ),
+              _StatusRow(
+                label: 'Locale',
+                value: state.localeId.isEmpty ? 'unknown' : state.localeId,
               ),
               const SizedBox(height: 12),
-              Text('Respuesta LLM:', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Reconocido:',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.black26),
                 ),
-                child: Text(state.modelResponse.isEmpty ? 'Sin respuesta todavía' : state.modelResponse),
+                child: Text(
+                  state.recognizedText.isEmpty
+                      ? 'Sin texto aún'
+                      : state.recognizedText,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Respuesta LLM:',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.black26),
+                ),
+                child: Text(
+                  state.modelResponse.isEmpty
+                      ? 'Sin respuesta todavía'
+                      : state.modelResponse,
+                ),
               ),
               if (state.lastError != null && state.lastError!.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Text('Error: ${state.lastError}', style: const TextStyle(color: Colors.red)),
+                Text(
+                  'Error: ${state.lastError}',
+                  style: const TextStyle(color: Colors.red),
+                ),
               ],
               const Divider(height: 32),
               const Text('Log'),
@@ -366,7 +266,11 @@ class _VoxiaHomePageState extends State<VoxiaHomePage> {
                   border: Border.all(color: Colors.black26),
                 ),
                 child: SingleChildScrollView(
-                  child: Text(state.logAsText.isEmpty ? 'Sin eventos todavía' : state.logAsText),
+                  child: Text(
+                    state.logAsText.isEmpty
+                        ? 'Sin eventos todavía'
+                        : state.logAsText,
+                  ),
                 ),
               ),
             ],
@@ -404,8 +308,14 @@ class _VoxiaHomePageState extends State<VoxiaHomePage> {
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.assignment), label: 'Cuestionario'),
-          BottomNavigationBarItem(icon: Icon(Icons.play_arrow), label: 'Prueba modelo'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.assignment),
+            label: 'Cuestionario',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.play_arrow),
+            label: 'Prueba modelo',
+          ),
           BottomNavigationBarItem(icon: Icon(Icons.storage), label: 'Modelos'),
           BottomNavigationBarItem(icon: Icon(Icons.mic), label: 'Sesión Voxia'),
         ],
@@ -454,7 +364,9 @@ class _PendingThinking {
 }
 
 class _ModelTestScreenState extends State<ModelTestScreen> {
-  final TextEditingController _promptController = TextEditingController(text: 'Hello!');
+  final TextEditingController _promptController = TextEditingController(
+    text: 'Hello!',
+  );
   String _responseText = '';
   bool _isRunning = false;
   StreamSubscription<ModelResponse>? _respSub;
@@ -469,16 +381,37 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
 
   bool _isInstallingLocal = false;
   double _progressLocal = 0.0;
+  late final VoxiaModelManager _modelManager;
+
+  @override
+  void initState() {
+    super.initState();
+    _modelManager = VoxiaModelManager();
+    _modelManager.addListener(_handleModelManagerUpdate);
+  }
 
   @override
   void dispose() {
     _promptController.dispose();
     _respSub?.cancel();
     _conversationScrollController.dispose();
+    _modelManager.removeListener(_handleModelManagerUpdate);
+    _modelManager.dispose();
     super.dispose();
   }
 
-  Future<void> _resetChatSession({bool clearHistory = false, bool notify = false}) async {
+  void _handleModelManagerUpdate() {
+    if (!mounted) return;
+    setState(() {
+      _isInstallingLocal = _modelManager.isInstalling;
+      _progressLocal = _modelManager.progress;
+    });
+  }
+
+  Future<void> _resetChatSession({
+    bool clearHistory = false,
+    bool notify = false,
+  }) async {
     await _respSub?.cancel();
     _respSub = null;
     _chat = null;
@@ -489,7 +422,10 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
       setState(() => _conversation.clear());
     }
     if (notify) {
-      setState(() => _conversation.add(_ConversationEntry.system('Sesión reiniciada.')));
+      setState(
+        () =>
+            _conversation.add(_ConversationEntry.system('Sesión reiniciada.')),
+      );
       _scrollToBottom();
     }
   }
@@ -541,72 +477,95 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
     final stream = await service.processMessage(sourceMessage);
 
     await _respSub?.cancel();
-    _respSub = stream.listen((ModelResponse resp) {
-      debugPrint('Stream event: type=${resp.runtimeType} payload=$resp');
-      if (!mounted || responseIndex < 0 || responseIndex >= _conversation.length) return;
+    _respSub = stream.listen(
+      (ModelResponse resp) {
+        debugPrint('Stream event: type=${resp.runtimeType} payload=$resp');
+        if (!mounted ||
+            responseIndex < 0 ||
+            responseIndex >= _conversation.length)
+          return;
 
-      if (resp is TextResponse) {
-        if (resp.token.isEmpty) return;
-        setState(() => _conversation[responseIndex].text += resp.token);
-      } else if (resp is ThinkingResponse) {
-        _pendingThinking ??= _PendingThinking();
-        _pendingThinking!.add(resp.content);
+        if (resp is TextResponse) {
+          if (resp.token.isEmpty) return;
+          setState(() => _conversation[responseIndex].text += resp.token);
+        } else if (resp is ThinkingResponse) {
+          _pendingThinking ??= _PendingThinking();
+          _pendingThinking!.add(resp.content);
 
-        if (_activeThinkingIndex == null) {
+          if (_activeThinkingIndex == null) {
+            setState(() {
+              _conversation.add(
+                _ConversationEntry.system('[Pensando]\n${resp.content}'),
+              );
+              _activeThinkingIndex = _conversation.length - 1;
+            });
+          } else {
+            setState(
+              () => _conversation[_activeThinkingIndex!].text += resp.content,
+            );
+          }
+        } else if (resp is FunctionCallResponse) {
+          final serializedArgs = resp.args.entries
+              .map((e) => '${e.key}: ${e.value}')
+              .join(', ');
           setState(() {
-            _conversation.add(_ConversationEntry.system('[Pensando]\n${resp.content}'));
-            _activeThinkingIndex = _conversation.length - 1;
+            _conversation.add(
+              _ConversationEntry.system(
+                '🔧 Llamada a función ${resp.name} ($serializedArgs)',
+              ),
+            );
           });
-        } else {
-          setState(() => _conversation[_activeThinkingIndex!].text += resp.content);
         }
-      } else if (resp is FunctionCallResponse) {
-        final serializedArgs = resp.args.entries.map((e) => '${e.key}: ${e.value}').join(', ');
-        setState(() {
-          _conversation.add(_ConversationEntry.system('🔧 Llamada a función ${resp.name} ($serializedArgs)'));
-        });
-      }
-      _scrollToBottom();
-    }, onError: (error) {
-      if (!mounted) return;
-      final message = '[Error streaming response] $error';
-      if (responseIndex >= 0 && responseIndex < _conversation.length) {
-        setState(() => _conversation[responseIndex].text += '\n$message');
-      } else {
-        _appendSystemMessage(message);
-      }
-      setState(() => _isRunning = false);
-    }, onDone: () async {
-      if (!mounted) return;
-      final entry = _conversation[responseIndex];
+        _scrollToBottom();
+      },
+      onError: (error) {
+        if (!mounted) return;
+        final message = '[Error streaming response] $error';
+        if (responseIndex >= 0 && responseIndex < _conversation.length) {
+          setState(() => _conversation[responseIndex].text += '\n$message');
+        } else {
+          _appendSystemMessage(message);
+        }
+        setState(() => _isRunning = false);
+      },
+      onDone: () async {
+        if (!mounted) return;
+        final entry = _conversation[responseIndex];
 
-      if (entry.text.trim().isEmpty) {
-        setState(() => entry.text = '[La respuesta llegó vacía.]');
-        if (_retryingAfterEmpty) {
-          _appendSystemMessage('Reintento fallido. Por favor intenta de nuevo manualmente.');
-          setState(() => _isRunning = false);
-          _retryingAfterEmpty = false;
+        if (entry.text.trim().isEmpty) {
+          setState(() => entry.text = '[La respuesta llegó vacía.]');
+          if (_retryingAfterEmpty) {
+            _appendSystemMessage(
+              'Reintento fallido. Por favor intenta de nuevo manualmente.',
+            );
+            setState(() => _isRunning = false);
+            _retryingAfterEmpty = false;
+            return;
+          }
+
+          _retryingAfterEmpty = true;
+          await _retryWithFreshChat(sourceMessage, responseIndex);
           return;
         }
 
-        _retryingAfterEmpty = true;
-        await _retryWithFreshChat(sourceMessage, responseIndex);
-        return;
-      }
-
-      if (_activeThinkingIndex != null) {
-        setState(() {
-          _conversation[_activeThinkingIndex!].text += '\n[Fin del pensamiento]';
-          _activeThinkingIndex = null;
-        });
-      }
-      _pendingThinking = null;
-      _retryingAfterEmpty = false;
-      setState(() => _isRunning = false);
-    });
+        if (_activeThinkingIndex != null) {
+          setState(() {
+            _conversation[_activeThinkingIndex!].text +=
+                '\n[Fin del pensamiento]';
+            _activeThinkingIndex = null;
+          });
+        }
+        _pendingThinking = null;
+        _retryingAfterEmpty = false;
+        setState(() => _isRunning = false);
+      },
+    );
   }
 
-  Future<void> _retryWithFreshChat(Message originalMsg, int responseIndex) async {
+  Future<void> _retryWithFreshChat(
+    Message originalMsg,
+    int responseIndex,
+  ) async {
     await _respSub?.cancel();
     _respSub = null;
 
@@ -617,7 +576,9 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
       }
     });
 
-    _appendSystemMessage('La respuesta llegó vacía, reintentando con una sesión nueva...');
+    _appendSystemMessage(
+      'La respuesta llegó vacía, reintentando con una sesión nueva...',
+    );
 
     try {
       final newModel = await FlutterGemmaPlugin.instance.createModel(
@@ -628,17 +589,27 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
       _cachedModel = newModel;
       _chat = await newModel.createChat();
       final retryIndex = _createAssistantEntry();
-      await _startStreamingResponse(chat: _chat!, responseIndex: retryIndex, sourceMessage: originalMsg);
+      await _startStreamingResponse(
+        chat: _chat!,
+        responseIndex: retryIndex,
+        sourceMessage: originalMsg,
+      );
     } catch (e) {
       setState(() {
         _isRunning = false;
-        _conversation.add(_ConversationEntry.system('No fue posible reintentar la respuesta: $e'));
+        _conversation.add(
+          _ConversationEntry.system(
+            'No fue posible reintentar la respuesta: $e',
+          ),
+        );
       });
     }
   }
 
   Future<bool> _handleNoActiveModel(String prompt) async {
-    _appendSystemMessage('No hay modelo activo: intentando crear uno en CPU...');
+    _appendSystemMessage(
+      'No hay modelo activo: intentando crear uno en CPU...',
+    );
     try {
       final legacyModel = await FlutterGemmaPlugin.instance.createModel(
         modelType: ModelType.gemmaIt,
@@ -654,7 +625,8 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
       if (mounted) {
         setState(() {
           _isRunning = false;
-          _responseText = 'No hay un modelo activo. Instala uno en la pestaña Modelos o usa el paquete por defecto.';
+          _responseText =
+              'No hay un modelo activo. Instala uno en la pestaña Modelos o usa el paquete por defecto.';
         });
       }
       final installed = await _promptInstallDefaultModel();
@@ -668,71 +640,57 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
   }
 
   Future<bool> _installDefaultAssetAndSetActive() async {
-    setState(() {
-      _isInstallingLocal = true;
-      _progressLocal = 0.0;
-    });
-
-    try {
-      await FlutterGemma.installModel(
-        modelType: ModelType.gemmaIt,
-        fileType: ModelFileType.task,
-      ).fromAsset(defaultModelAssetKey).withProgress((progress) {
-        final p = (progress as num).toDouble();
-        if (mounted) {
-          setState(() {
-            _progressLocal = p;
-          });
-        }
-      }).install();
-
-      final valid = await validateModelActivation(defaultModelAssetKey);
-      if (valid) {
-        await _resetChatSession(clearHistory: true, notify: true);
-      }
-      if (mounted) {
-        if (valid) {
-          setState(() {
-            _responseText = 'Modelo instalado y activado correctamente.';
-          });
-        } else {
-          setState(() {
-            _responseText = 'Modelo instalado pero no pudo activarse correctamente.';
-          });
-        }
-      }
-
-      return valid;
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _responseText = 'Error instalando modelo por defecto: $e';
-        });
-      }
-      return false;
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isInstallingLocal = false;
-          _progressLocal = 0.0;
-        });
-      }
+    if (mounted) {
+      setState(() {
+        _responseText = 'Instalando modelo por defecto...';
+      });
     }
+
+    final VoxiaModelActionResult result =
+        await _modelManager.installDefaultModel();
+    if (!mounted) {
+      return result.success;
+    }
+
+    if (result.success) {
+      await _resetChatSession(clearHistory: true, notify: true);
+      setState(() {
+        _responseText = 'Modelo instalado y activado correctamente.';
+      });
+    } else {
+      setState(() {
+        _responseText = result.message;
+      });
+    }
+
+    return result.success;
   }
 
   Future<bool> _promptInstallDefaultModel() async {
     if (!mounted) return false;
     final choice = await showDialog<String?>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('No hay modelo activo'),
-        content: const Text('No se ha encontrado un modelo activo. ¿Deseas instalar el modelo empaquetado gemma3-1B-it-int4.task ahora?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop('cancel'), child: const Text('Cancelar')),
-          TextButton(onPressed: () => Navigator.of(ctx).pop('models'), child: const Text('Ir a Modelos')),
-          ElevatedButton(onPressed: () => Navigator.of(ctx).pop('install'), child: const Text('Instalar ahora')),
-        ],
-      ),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('No hay modelo activo'),
+            content: const Text(
+              'No se ha encontrado un modelo activo. ¿Deseas instalar el modelo empaquetado gemma3-1B-it-int4.task ahora?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop('cancel'),
+                child: const Text('Cancelar'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop('models'),
+                child: const Text('Ir a Modelos'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop('install'),
+                child: const Text('Instalar ahora'),
+              ),
+            ],
+          ),
     );
 
     if (!mounted) return false;
@@ -741,7 +699,8 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
       return await _installDefaultAssetAndSetActive();
     } else if (choice == 'models') {
       try {
-        final homeState = context.findAncestorStateOfType<_VoxiaHomePageState>();
+        final homeState =
+            context.findAncestorStateOfType<_VoxiaHomePageState>();
         if (homeState != null) {
           homeState._onItemTapped(1);
         }
@@ -754,10 +713,17 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
   Future<void> _runWithChat(InferenceChat chat, String prompt) async {
     final userMessage = Message.text(text: prompt, isUser: true);
     final responseIndex = _createAssistantEntry();
-    await _startStreamingResponse(chat: chat, responseIndex: responseIndex, sourceMessage: userMessage);
+    await _startStreamingResponse(
+      chat: chat,
+      responseIndex: responseIndex,
+      sourceMessage: userMessage,
+    );
   }
 
-  Future<void> _runModel({String? promptOverride, bool appendUserMessage = true}) async {
+  Future<void> _runModel({
+    String? promptOverride,
+    bool appendUserMessage = true,
+  }) async {
     final rawPrompt = promptOverride ?? _promptController.text;
     final prompt = rawPrompt.trim();
     if (prompt.isEmpty) return;
@@ -816,7 +782,8 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
 
       if (mounted) {
         setState(() {
-          _responseText = 'Verificación completa: modelo inicializado correctamente (CPU).';
+          _responseText =
+              'Verificación completa: modelo inicializado correctamente (CPU).';
         });
       }
       return;
@@ -824,20 +791,24 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
       if (e is TimeoutException) {
         if (mounted) {
           setState(() {
-            _responseText = 'Tiempo de espera en inicialización del modelo activo. Intentando fallback (legacy createModel) en CPU...';
+            _responseText =
+                'Tiempo de espera en inicialización del modelo activo. Intentando fallback (legacy createModel) en CPU...';
           });
         }
 
         try {
-          await FlutterGemmaPlugin.instance.createModel(
-            modelType: ModelType.gemmaIt,
-            preferredBackend: PreferredBackend.cpu,
-            maxTokens: 2048,
-          ).timeout(const Duration(seconds: 30));
+          await FlutterGemmaPlugin.instance
+              .createModel(
+                modelType: ModelType.gemmaIt,
+                preferredBackend: PreferredBackend.cpu,
+                maxTokens: 2048,
+              )
+              .timeout(const Duration(seconds: 30));
 
           if (mounted) {
             setState(() {
-              _responseText = 'Fallback exitoso: modelo creado en CPU con API legacy.';
+              _responseText =
+                  'Fallback exitoso: modelo creado en CPU con API legacy.';
             });
           }
           return;
@@ -845,15 +816,27 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
           if (!mounted) return;
           final choice = await showDialog<String?>(
             context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('No se pudo inicializar el modelo'),
-              content: const Text('La verificación tardó demasiado y no fue posible crear un modelo en CPU. ¿Deseas instalar el modelo empaquetado gemma3-1B-it-int4.task ahora?'),
-              actions: [
-                TextButton(onPressed: () => Navigator.of(ctx).pop('cancel'), child: const Text('Cancelar')),
-                TextButton(onPressed: () => Navigator.of(ctx).pop('models'), child: const Text('Ir a Modelos')),
-                ElevatedButton(onPressed: () => Navigator.of(ctx).pop('install'), child: const Text('Instalar ahora')),
-              ],
-            ),
+            builder:
+                (ctx) => AlertDialog(
+                  title: const Text('No se pudo inicializar el modelo'),
+                  content: const Text(
+                    'La verificación tardó demasiado y no fue posible crear un modelo en CPU. ¿Deseas instalar el modelo empaquetado gemma3-1B-it-int4.task ahora?',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop('cancel'),
+                      child: const Text('Cancelar'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop('models'),
+                      child: const Text('Ir a Modelos'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.of(ctx).pop('install'),
+                      child: const Text('Instalar ahora'),
+                    ),
+                  ],
+                ),
           );
 
           if (choice == 'install') {
@@ -863,18 +846,31 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
               await _safeVerifyActivation();
               return;
             } else {
-              if (mounted) setState(() => _responseText = 'Instalación intentada pero la activación falló.');
+              if (mounted)
+                setState(
+                  () =>
+                      _responseText =
+                          'Instalación intentada pero la activación falló.',
+                );
               return;
             }
           } else if (choice == 'models') {
             if (mounted) {
-              final homeState = context.findAncestorStateOfType<_VoxiaHomePageState>();
+              final homeState =
+                  context.findAncestorStateOfType<_VoxiaHomePageState>();
               if (homeState != null) homeState._onItemTapped(1);
-              setState(() => _responseText = 'Ve a la pestaña Modelos para instalar manualmente.');
+              setState(
+                () =>
+                    _responseText =
+                        'Ve a la pestaña Modelos para instalar manualmente.',
+              );
             }
             return;
           } else {
-            if (mounted) setState(() => _responseText = 'Verificación cancelada por el usuario.');
+            if (mounted)
+              setState(
+                () => _responseText = 'Verificación cancelada por el usuario.',
+              );
             return;
           }
         }
@@ -885,15 +881,27 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
         if (!mounted) return;
         final choice = await showDialog<String?>(
           context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('No hay modelo activo'),
-            content: const Text('No se encontró un modelo activo. ¿Deseas instalar el modelo por defecto gemma3-1B-it-int4.task ahora?'),
-            actions: [
-              TextButton(onPressed: () => Navigator.of(ctx).pop('cancel'), child: const Text('Cancelar')),
-              TextButton(onPressed: () => Navigator.of(ctx).pop('models'), child: const Text('Ir a Modelos')),
-              ElevatedButton(onPressed: () => Navigator.of(ctx).pop('install'), child: const Text('Instalar ahora')),
-            ],
-          ),
+          builder:
+              (ctx) => AlertDialog(
+                title: const Text('No hay modelo activo'),
+                content: const Text(
+                  'No se encontró un modelo activo. ¿Deseas instalar el modelo por defecto gemma3-1B-it-int4.task ahora?',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop('cancel'),
+                    child: const Text('Cancelar'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop('models'),
+                    child: const Text('Ir a Modelos'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.of(ctx).pop('install'),
+                    child: const Text('Instalar ahora'),
+                  ),
+                ],
+              ),
         );
 
         if (choice == 'install') {
@@ -903,18 +911,31 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
             await _safeVerifyActivation();
             return;
           } else {
-            if (mounted) setState(() => _responseText = 'Instalación intentada pero la activación falló.');
+            if (mounted)
+              setState(
+                () =>
+                    _responseText =
+                        'Instalación intentada pero la activación falló.',
+              );
             return;
           }
         } else if (choice == 'models') {
           if (mounted) {
-            final homeState = context.findAncestorStateOfType<_VoxiaHomePageState>();
+            final homeState =
+                context.findAncestorStateOfType<_VoxiaHomePageState>();
             if (homeState != null) homeState._onItemTapped(1);
-            setState(() => _responseText = 'Ve a la pestaña Modelos para instalar manualmente.');
+            setState(
+              () =>
+                  _responseText =
+                      'Ve a la pestaña Modelos para instalar manualmente.',
+            );
           }
           return;
         } else {
-          if (mounted) setState(() => _responseText = 'Verificación cancelada por el usuario.');
+          if (mounted)
+            setState(
+              () => _responseText = 'Verificación cancelada por el usuario.',
+            );
           return;
         }
       }
@@ -940,13 +961,19 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Prueba Modern API (usa el modelo activo):', style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Prueba Modern API (usa el modelo activo):',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _promptController,
                     maxLines: 6,
                     minLines: 1,
-                    decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Prompt'),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Prompt',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -954,8 +981,15 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
                       Expanded(
                         child: ElevatedButton.icon(
                           icon: const Icon(Icons.play_arrow),
-                          label: Text(_isRunning ? 'Corriendo...' : 'Enviar y generar respuesta'),
-                          onPressed: _isRunning || _isInstallingLocal ? null : _runModel,
+                          label: Text(
+                            _isRunning
+                                ? 'Corriendo...'
+                                : 'Enviar y generar respuesta',
+                          ),
+                          onPressed:
+                              _isRunning || _isInstallingLocal
+                                  ? null
+                                  : _runModel,
                         ),
                       ),
                     ],
@@ -965,8 +999,13 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: _isRunning || _isInstallingLocal ? null : _safeVerifyActivation,
-                          child: const Text('Verificar activación segura (CPU)'),
+                          onPressed:
+                              _isRunning || _isInstallingLocal
+                                  ? null
+                                  : _safeVerifyActivation,
+                          child: const Text(
+                            'Verificar activación segura (CPU)',
+                          ),
                         ),
                       ),
                     ],
@@ -975,7 +1014,9 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
                   if (_isInstallingLocal) ...[
                     LinearProgressIndicator(value: _progressLocal / 100.0),
                     const SizedBox(height: 8),
-                    Text('Instalando modelo por defecto: ${_progressLocal.toStringAsFixed(1)}%'),
+                    Text(
+                      'Instalando modelo por defecto: ${_progressLocal.toStringAsFixed(1)}%',
+                    ),
                   ],
                 ],
               ),
@@ -1004,42 +1045,59 @@ class _ModelTestScreenState extends State<ModelTestScreen> {
                       child: SelectableText(_responseText),
                     ),
                   Expanded(
-                    child: _conversation.isEmpty
-                        ? const Center(child: Text('Aquí aparecerá la conversación con el modelo.'))
-                        : ListView.builder(
-                            controller: _conversationScrollController,
-                            itemCount: _conversation.length,
-                            itemBuilder: (context, index) {
-                              final entry = _conversation[index];
-                              final alignment = entry.role == _ConversationRole.user
-                                  ? Alignment.centerRight
-                                  : Alignment.centerLeft;
-                              final bubbleColor = entry.role == _ConversationRole.user
-                                  ? Theme.of(context).colorScheme.primaryContainer
-                                  : entry.role == _ConversationRole.system
-                                      ? Colors.amber.shade100
-                                      : Colors.grey.shade200;
-                              final textStyle = TextStyle(
-                                color: entry.role == _ConversationRole.user
-                                    ? Theme.of(context).colorScheme.onPrimaryContainer
-                                    : Colors.black87,
-                                fontStyle: entry.role == _ConversationRole.system ? FontStyle.italic : FontStyle.normal,
-                              );
+                    child:
+                        _conversation.isEmpty
+                            ? const Center(
+                              child: Text(
+                                'Aquí aparecerá la conversación con el modelo.',
+                              ),
+                            )
+                            : ListView.builder(
+                              controller: _conversationScrollController,
+                              itemCount: _conversation.length,
+                              itemBuilder: (context, index) {
+                                final entry = _conversation[index];
+                                final alignment =
+                                    entry.role == _ConversationRole.user
+                                        ? Alignment.centerRight
+                                        : Alignment.centerLeft;
+                                final bubbleColor =
+                                    entry.role == _ConversationRole.user
+                                        ? Theme.of(
+                                          context,
+                                        ).colorScheme.primaryContainer
+                                        : entry.role == _ConversationRole.system
+                                        ? Colors.amber.shade100
+                                        : Colors.grey.shade200;
+                                final textStyle = TextStyle(
+                                  color:
+                                      entry.role == _ConversationRole.user
+                                          ? Theme.of(
+                                            context,
+                                          ).colorScheme.onPrimaryContainer
+                                          : Colors.black87,
+                                  fontStyle:
+                                      entry.role == _ConversationRole.system
+                                          ? FontStyle.italic
+                                          : FontStyle.normal,
+                                );
 
-                              return Align(
-                                alignment: alignment,
-                                child: Container(
-                                  margin: const EdgeInsets.symmetric(vertical: 4),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: bubbleColor,
-                                    borderRadius: BorderRadius.circular(12),
+                                return Align(
+                                  alignment: alignment,
+                                  child: Container(
+                                    margin: const EdgeInsets.symmetric(
+                                      vertical: 4,
+                                    ),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: bubbleColor,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(entry.text, style: textStyle),
                                   ),
-                                  child: Text(entry.text, style: textStyle),
-                                ),
-                              );
-                            },
-                          ),
+                                );
+                              },
+                            ),
                   ),
                 ],
               ),
@@ -1064,11 +1122,7 @@ class _StatusRow extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
+            child: Text(label, overflow: TextOverflow.ellipsis, maxLines: 1),
           ),
           const SizedBox(width: 12),
           Flexible(
@@ -1081,6 +1135,237 @@ class _StatusRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _NurseAssistantTab extends StatefulWidget {
+  const _NurseAssistantTab();
+
+  @override
+  State<_NurseAssistantTab> createState() => _NurseAssistantTabState();
+}
+
+class _NurseAssistantTabState extends State<_NurseAssistantTab> {
+  late final VoxiaQuestionnaireManager _manager;
+
+  @override
+  void initState() {
+    super.initState();
+    _manager = VoxiaQuestionnaireManager();
+  }
+
+  @override
+  void dispose() {
+    _manager.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _manager,
+      builder: (BuildContext context, _) {
+        final VoxiaQuestionnaireState state = _manager.state;
+        final VoxiaSessionState voiceState = state.voiceState;
+        final ThemeData theme = Theme.of(context);
+
+        return Scaffold(
+          appBar: AppBar(title: const Text('Asistente de curaciones Voxia')),
+          body: Column(
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: <Widget>[
+                        _StatusChip(
+                          label: 'Sesion',
+                          value:
+                              state.sessionActive
+                                  ? 'Activa'
+                                  : state.sessionCompleted
+                                  ? 'Completa'
+                                  : 'Inactiva',
+                        ),
+                        _StatusChip(
+                          label: 'Motor voz',
+                          value: voiceState.status.name,
+                        ),
+                        if (voiceState.isListening)
+                          const _StatusChip(
+                            label: 'Escucha',
+                            value: 'Capturando',
+                          ),
+                        if (state.awaitingAnswer)
+                          const _StatusChip(
+                            label: 'Estado',
+                            value: 'Esperando respuesta',
+                          ),
+                        if (state.processingAnswer)
+                          const _StatusChip(
+                            label: 'Estado',
+                            value: 'Procesando',
+                          ),
+                        if (state.pendingVoiceStart)
+                          const _StatusChip(
+                            label: 'Conexion',
+                            value: 'Iniciando Voxia',
+                          ),
+                      ],
+                    ),
+                    if (voiceState.recognizedText.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              'Transcripcion actual',
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(voiceState.recognizedText),
+                          ],
+                        ),
+                      ),
+                    if (state.lastError != null && state.lastError!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Text(
+                          state.lastError!,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.error,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child:
+                    state.messages.isEmpty
+                        ? const Center(
+                          child: Text(
+                            'Aun no hay mensajes. Inicia la sesion para hablar con Voxia.',
+                          ),
+                        )
+                        : ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: state.messages.length,
+                          itemBuilder: (BuildContext context, int index) {
+                            final VoxiaQuestionMessage message =
+                                state.messages[index];
+                            final bool isAssistant =
+                                message.role ==
+                                VoxiaQuestionMessageRole.assistant;
+                            final Color background =
+                                isAssistant
+                                    ? theme.colorScheme.primary.withOpacity(0.1)
+                                    : theme.colorScheme.secondaryContainer;
+
+                            return Align(
+                              alignment:
+                                  isAssistant
+                                      ? Alignment.centerLeft
+                                      : Alignment.centerRight,
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                constraints: const BoxConstraints(
+                                  maxWidth: 320,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: background,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  message.text,
+                                  style: theme.textTheme.bodyMedium,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+              ),
+              if (state.summary.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            'Resumen de respuestas',
+                            style: theme.textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          SelectableText(state.summary),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          bottomNavigationBar: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed:
+                        state.canStartSession
+                            ? () => _manager.startSession()
+                            : null,
+                    icon: const Icon(Icons.mic_none),
+                    label: const Text('Iniciar Voxia'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed:
+                        state.canCloseSession
+                            ? () => _manager.closeSession()
+                            : null,
+                    icon: const Icon(Icons.stop_circle_outlined),
+                    label: const Text('Detener'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.grey.shade200,
+      ),
+      child: Text('$label: $value'),
     );
   }
 }

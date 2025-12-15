@@ -15,17 +15,17 @@ class VoxiaController extends ChangeNotifier {
     required SpeechToText speech,
     required FlutterTts tts,
     required SoundPlayer soundPlayer,
-    Duration silenceTimeout = const Duration(seconds: 5),
-    Duration listenFor = const Duration(seconds: 60),
-  })  : _speech = speech,
-        _tts = tts,
-        _soundPlayer = soundPlayer,
-        _silenceTimeout = silenceTimeout,
-        _listenFor = listenFor;
+    Duration silenceTimeout = const Duration(seconds: 4),
+    Duration listenFor = const Duration(minutes: 2),
+  }) : _speech = speech,
+       _tts = tts,
+       _soundPlayer = soundPlayer,
+       _silenceTimeout = silenceTimeout,
+       _listenFor = listenFor;
 
   factory VoxiaController.defaultInstance({
-    Duration silenceTimeout = const Duration(seconds: 5),
-    Duration listenFor = const Duration(seconds: 60),
+    Duration silenceTimeout = const Duration(seconds: 4),
+    Duration listenFor = const Duration(minutes: 2),
   }) {
     return VoxiaController(
       speech: SpeechToText(),
@@ -49,26 +49,32 @@ class VoxiaController extends ChangeNotifier {
 
   Future<void> login() async {
     if (_state.status == SessionStatus.initializing) return;
-    _updateState(_state.copyWith(status: SessionStatus.initializing, lastError: null));
+    _updateState(
+      _state.copyWith(status: SessionStatus.initializing, lastError: null),
+    );
     _appendLog('Iniciando sesión de voz');
     try {
       await _initializeTts();
       await _initializeSpeech();
     } catch (e) {
       _appendLog('Error al iniciar: $e');
-      _updateState(_state.copyWith(status: SessionStatus.error, lastError: '$e'));
+      _updateState(
+        _state.copyWith(status: SessionStatus.error, lastError: '$e'),
+      );
     }
   }
 
   Future<void> startListening() async {
     if (!_state.canListen) return;
     _cancelSilenceTimer();
-    _updateState(_state.copyWith(
-      isListening: true,
-      silenceStopPending: false,
-      hasSpoken: false,
-      lastError: null,
-    ));
+    _updateState(
+      _state.copyWith(
+        isListening: true,
+        silenceStopPending: false,
+        hasSpoken: false,
+        lastError: null,
+      ),
+    );
     _appendLog('start listening');
     await _speech.listen(
       onResult: _onSpeechResult,
@@ -84,15 +90,18 @@ class VoxiaController extends ChangeNotifier {
     _appendLog('stop listening');
     _cancelSilenceTimer();
     await _speech.stop();
-    _updateState(_state.copyWith(
-      isListening: false,
-      silenceStopPending: false,
-      hasSpoken: false,
-    ));
+    _updateState(
+      _state.copyWith(
+        isListening: false,
+        silenceStopPending: false,
+        hasSpoken: false,
+      ),
+    );
   }
 
   Future<void> speakText([String? text]) async {
-    final content = text?.trim().isNotEmpty == true ? text!.trim() : _state.recognizedText;
+    final content =
+        text?.trim().isNotEmpty == true ? text!.trim() : _state.recognizedText;
     if (content.isEmpty) return;
     await _tts.setVolume(1.0);
     await _tts.setSpeechRate(0.45);
@@ -101,7 +110,9 @@ class VoxiaController extends ChangeNotifier {
     await _tts.speak(content);
   }
 
-  Future<void> playNotification({String assetPath = 'sounds/notification.m4r'}) async {
+  Future<void> playNotification({
+    String assetPath = 'sounds/notification.m4r',
+  }) async {
     _appendLog('play sound: $assetPath');
     await _soundPlayer.play(assetPath);
   }
@@ -157,11 +168,13 @@ class VoxiaController extends ChangeNotifier {
 
     if (!available) {
       _appendLog('Speech not available or permission denied');
-      _updateState(_state.copyWith(
-        speechEnabled: false,
-        status: SessionStatus.error,
-        lastError: 'Speech not available or permission denied',
-      ));
+      _updateState(
+        _state.copyWith(
+          speechEnabled: false,
+          status: SessionStatus.error,
+          lastError: 'Speech not available or permission denied',
+        ),
+      );
       return;
     }
 
@@ -171,23 +184,27 @@ class VoxiaController extends ChangeNotifier {
       orElse: () => locales.first,
     );
     _appendLog('Locale selected: ${locale.localeId}');
-    _updateState(_state.copyWith(
-      status: SessionStatus.ready,
-      speechEnabled: true,
-      localeId: locale.localeId,
-      lastError: null,
-    ));
+    _updateState(
+      _state.copyWith(
+        status: SessionStatus.ready,
+        speechEnabled: true,
+        localeId: locale.localeId,
+        lastError: null,
+      ),
+    );
   }
 
   void _onSpeechResult(SpeechRecognitionResult result) {
     final recognized = result.recognizedWords;
     _appendLog('Speech result: $recognized');
     _cancelSilenceTimer();
-    _updateState(_state.copyWith(
-      recognizedText: recognized,
-      hasSpoken: true,
-      silenceStopPending: true,
-    ));
+    _updateState(
+      _state.copyWith(
+        recognizedText: recognized,
+        hasSpoken: true,
+        silenceStopPending: true,
+      ),
+    );
     _silenceTimer = Timer(_silenceTimeout, () async {
       if (!_speech.isListening) return;
       _appendLog('Silence auto-stop after ${_silenceTimeout.inSeconds}s');
@@ -201,13 +218,17 @@ class VoxiaController extends ChangeNotifier {
     _appendLog('Speech status: $status');
     if (status == SpeechToText.listeningStatus || status == 'listening') {
       _cancelSilenceTimer();
-      _updateState(_state.copyWith(isListening: true, silenceStopPending: false));
+      _updateState(
+        _state.copyWith(isListening: true, silenceStopPending: false),
+      );
     } else if (status == SpeechToText.doneStatus || status == 'notListening') {
       if (!_state.hasSpoken) {
         _appendLog('Stopping: no user speech detected during session');
         await _speech.stop();
       }
-      _updateState(_state.copyWith(isListening: false, silenceStopPending: false));
+      _updateState(
+        _state.copyWith(isListening: false, silenceStopPending: false),
+      );
     }
   }
 
@@ -223,7 +244,8 @@ class VoxiaController extends ChangeNotifier {
 
   void _appendLog(String message) {
     final timestamp = DateTime.now().toIso8601String();
-    final updated = List<String>.from(_state.logLines)..add('$timestamp: $message');
+    final updated = List<String>.from(_state.logLines)
+      ..add('$timestamp: $message');
     const maxLogLines = 80;
     if (updated.length > maxLogLines) {
       updated.removeRange(0, updated.length - maxLogLines);
