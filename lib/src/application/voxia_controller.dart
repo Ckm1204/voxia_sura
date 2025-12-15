@@ -106,6 +106,29 @@ class VoxiaController extends ChangeNotifier {
     await _soundPlayer.play(assetPath);
   }
 
+  Future<void> logout() async {
+    if (_state.status == SessionStatus.loggedOut) return;
+    _appendLog('Cerrando sesión de voz');
+    _cancelSilenceTimer();
+    try {
+      await _speech.stop();
+    } catch (_) {
+      // ignore stop errors
+    }
+    try {
+      await _tts.stop();
+    } catch (_) {
+      // ignore stop errors
+    }
+    _updateState(VoxiaSessionState.initial());
+  }
+
+  void clearRecognizedText() {
+    if (_state.recognizedText.isEmpty && !_state.hasSpoken) return;
+    _appendLog('Clearing recognized text');
+    _updateState(_state.copyWith(recognizedText: '', hasSpoken: false));
+  }
+
   @override
   void dispose() {
     _cancelSilenceTimer();

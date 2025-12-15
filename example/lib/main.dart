@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sura_voxia/sura_voxia.dart';
+import 'nurse_questionnaire_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 const String defaultModelAssetKey = 'assets/models/gemma3-1B-it-int4.task';
@@ -85,7 +86,6 @@ class _VoxiaHomePageState extends State<VoxiaHomePage> {
   int _selectedIndex = 0;
   bool _isInstalling = false;
   double _progress = 0.0;
-  int _counter = 0;
 
   @override
   void initState() {
@@ -99,9 +99,7 @@ class _VoxiaHomePageState extends State<VoxiaHomePage> {
     super.dispose();
   }
 
-  void _incrementCounter() {
-    setState(() => _counter++);
-  }
+  // Removed example FAB counter functionality.
 
   Future<void> _pickAndInstallModel() async {
     if (!io.Platform.isAndroid) {
@@ -241,6 +239,10 @@ class _VoxiaHomePageState extends State<VoxiaHomePage> {
     return const ModelTestScreen();
   }
 
+  Widget _buildNurseAssistantTab() {
+    return const NurseQuestionnaireScreen();
+  }
+
   Widget _buildModelsTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -277,8 +279,7 @@ class _VoxiaHomePageState extends State<VoxiaHomePage> {
           const SizedBox(height: 20),
           const Divider(),
           const SizedBox(height: 8),
-          const Text('Contador de ejemplo (FAB):'),
-          Text('$_counter', style: Theme.of(context).textTheme.headlineMedium),
+          // contador de ejemplo eliminado
         ],
       ),
     );
@@ -384,6 +385,7 @@ class _VoxiaHomePageState extends State<VoxiaHomePage> {
   @override
   Widget build(BuildContext context) {
     final tabs = <Widget>[
+      _buildNurseAssistantTab(),
       _buildModelTestTab(),
       _buildModelsTab(),
       _buildVoiceTab(),
@@ -396,19 +398,19 @@ class _VoxiaHomePageState extends State<VoxiaHomePage> {
       ),
       body: tabs[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
+        backgroundColor: Colors.white,
+        selectedItemColor: Theme.of(context).colorScheme.primary,
+        unselectedItemColor: Colors.black54,
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
         items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.assignment), label: 'Cuestionario'),
           BottomNavigationBarItem(icon: Icon(Icons.play_arrow), label: 'Prueba modelo'),
           BottomNavigationBarItem(icon: Icon(Icons.storage), label: 'Modelos'),
           BottomNavigationBarItem(icon: Icon(Icons.mic), label: 'Sesión Voxia'),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
+      // FAB removed: example counter no longer used
     );
   }
 }
